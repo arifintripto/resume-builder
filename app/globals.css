@@ -1,0 +1,549 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ss), 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: #1a1a1a;
+  background: #e9e9e9;
+}
+
+/* ---------- toolbar ---------- */
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e2e2e2;
+}
+
+.toolbar select {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #fff;
+  max-width: 180px;
+}
+
+.ctl-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #666;
+}
+
+.ctl-label input[type='color'] {
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.ctl-label input[type='range'] {
+  width: 80px;
+}
+
+.pct {
+  font-size: 11px;
+  color: #888;
+  min-width: 32px;
+}
+
+.auth-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+}
+
+.cloud-state {
+  font-size: 11px;
+  color: #888;
+  white-space: nowrap;
+}
+
+.toolbar .spacer {
+  flex: 1;
+}
+
+.toolbar button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.toolbar button:hover {
+  background: #f3f3f3;
+}
+
+.toolbar button.primary {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #fff;
+}
+
+.toolbar button.primary:hover {
+  background: #333;
+}
+
+.toolbar button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------- the A4 sheet ---------- */
+
+.page {
+  position: relative;
+  width: 8.27in;
+  /* one A4 sheet (1122.5px), plus a full page + gap (1150.5px) per extra page */
+  min-height: calc(1122.5px + (var(--pages, 1) - 1) * 1150.5px);
+  margin: 24px auto 64px;
+  background: #fff;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+  padding: 0.5in;
+}
+
+/* gray band between simulated sheets */
+.sheet-gap {
+  position: absolute;
+  left: -12px;
+  right: -12px;
+  height: 28px;
+  background: #e9e9e9;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  box-shadow: inset 0 5px 5px -5px rgba(0, 0, 0, 0.28),
+    inset 0 -5px 5px -5px rgba(0, 0, 0, 0.2);
+}
+
+.sheet-gap span {
+  margin-right: 22px;
+  font-size: 10px;
+  color: #8a90a0;
+  line-height: 1;
+}
+
+
+/* ---------- resume typography (mirrors resume.html) ---------- */
+
+.r-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+}
+
+.r-idgroup {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.r-name {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--accent, #1a1a1a);
+}
+
+.r-tagline {
+  margin-top: 5px;
+  font-size: 13.5px;
+  color: #8a8a8a;
+}
+
+.r-tagline-line,
+.r-contact-line {
+  position: relative;
+}
+
+.r-contact {
+  text-align: right;
+  font-size: 11px;
+  color: #585858;
+  line-height: 1.45;
+  flex-shrink: 0;
+}
+
+.r-photo {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  object-position: 50% 20%;
+  flex-shrink: 0;
+  display: block;
+  cursor: pointer;
+}
+
+.r-photobox {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.photo-x {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #666;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.r-photobox:hover .photo-x {
+  opacity: 1;
+}
+
+.r-photo-placeholder {
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+  border: 1.5px dashed #c9c9c9;
+  border-radius: 4px;
+  background: #fafafa;
+  color: #9a9a9a;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.r-photo-placeholder:hover {
+  border-color: #999;
+  color: #666;
+}
+
+.r-h2row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 22px 0 10px;
+  position: relative;
+}
+
+.r-h2 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--accent, #1a1a1a);
+}
+
+.r-rule {
+  flex: 1;
+  height: 1px;
+  background: #c9c9c9;
+}
+
+.r-entry {
+  position: relative;
+}
+
+.r-entry + .r-entry {
+  margin-top: 12px;
+}
+
+.r-entryrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  position: relative;
+}
+
+.r-h3 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  flex: 1;
+}
+
+.r-h4 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #2b2b2b;
+  flex: 1;
+}
+
+.r-meta {
+  font-size: 12.5px;
+  color: #8a8a8a;
+  font-style: italic;
+  flex-shrink: 0;
+}
+
+.r-meta-sm {
+  font-size: 12px;
+  color: #999;
+}
+
+.r-p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #585858;
+  text-wrap: pretty;
+}
+
+.r-ul {
+  margin: 5px 0 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #585858;
+  list-style: none;
+}
+
+.r-ul strong {
+  color: #1a1a1a;
+}
+
+.r-li {
+  orphans: 3;
+  widows: 3;
+  position: relative;
+  break-inside: avoid;
+}
+
+.r-li::before {
+  content: '-';
+  position: absolute;
+  left: -13px;
+  color: #777;
+}
+
+h2,
+h3,
+h4 {
+  break-after: avoid;
+}
+
+/* screen-only pagination pushes; print re-paginates natively and ignores these */
+@media screen {
+  .r-h2row {
+    margin-top: calc(22px + var(--push, 0px));
+  }
+  .r-entryrow,
+  .r-li,
+  .r-p {
+    margin-top: var(--push, 0px);
+  }
+}
+
+/* ---------- inline editing ---------- */
+
+[contenteditable] {
+  outline: none;
+  min-width: 1em;
+}
+
+[contenteditable]:hover {
+  box-shadow: inset 0 -1px 0 #ddd;
+}
+
+[contenteditable]:focus {
+  box-shadow: none;
+  outline: 1px dashed #b9b9b9;
+  outline-offset: 2px;
+}
+
+[contenteditable]:empty::before {
+  content: attr(data-placeholder);
+  color: #c2c2c2;
+}
+
+/* ---------- hover controls ---------- */
+
+.ctl {
+  position: absolute;
+  right: 0;
+  top: -22px;
+  z-index: 5;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: #fff;
+  border: 1px solid #e3e3e3;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+
+.hoverable:hover > .ctl {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ctl button {
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 4px;
+  background: #fff;
+  color: #666;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ctl button:hover {
+  background: #f0f0f0;
+  color: #111;
+}
+
+.ctl button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* section-header controls overlay the rule's right end instead of shortening it */
+.ctl-inrow {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  box-shadow: none;
+  padding: 0 0 0 8px;
+  background: #fff;
+}
+
+/* side controls for tagline / contact lines */
+.ctl-side {
+  top: 50%;
+  right: auto;
+  left: calc(100% + 6px);
+  transform: translateY(-50%);
+}
+
+.ctl-side-left {
+  top: 50%;
+  right: calc(100% + 6px);
+  left: auto;
+  transform: translateY(-50%);
+}
+
+.grip {
+  position: absolute;
+  left: -22px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #b5b5b5;
+  cursor: grab;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  touch-action: none;
+  user-select: none;
+}
+
+.r-h2row:hover .grip {
+  opacity: 1;
+}
+
+.grip:active {
+  cursor: grabbing;
+}
+
+.empty-hint {
+  font-size: 11px;
+  color: #c2c2c2;
+  font-style: italic;
+}
+
+.add-section {
+  display: block;
+  width: 100%;
+  margin-top: 26px;
+  padding: 8px;
+  font: inherit;
+  font-size: 12px;
+  color: #9a9a9a;
+  background: none;
+  border: 1.5px dashed #d5d5d5;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.add-section:hover {
+  color: #555;
+  border-color: #aaa;
+}
+
+/* ---------- print ---------- */
+
+@page {
+  size: A4;
+  margin: 0.5in;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .page {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .toolbar,
+  .no-print,
+  .ctl,
+  .grip {
+    display: none !important;
+  }
+
+  /* preview zoom is screen-only; !important beats the inline style in print */
+  .view-zoom {
+    zoom: 1 !important;
+  }
+
+  [contenteditable]:hover {
+    box-shadow: none;
+  }
+
+  [contenteditable]:empty::before {
+    content: none;
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+.env*
+.idea/
+
+# personal data — never commit real resumes
+alif-arifin-resume.json
+*.tsbuildinfo
+next-env.d.ts
