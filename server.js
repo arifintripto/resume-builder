@@ -8,8 +8,14 @@ const handle = app.getRequestHandler()
 
 app.prepare().then(() => {
   const port = process.env.PORT || 3000
+  const base = process.env.BASE_PATH || ''
   http
-    .createServer((req, res) => handle(req, res))
+    .createServer((req, res) => {
+      // Passenger strips the base URI from req.url, but Next was built with
+      // basePath and expects it — restore the prefix when it's missing.
+      if (base && !req.url.startsWith(base)) req.url = base + req.url
+      handle(req, res)
+    })
     .listen(port, () => {
       console.log(`resume-builder ready on port ${port}`)
     })
