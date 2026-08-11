@@ -12,7 +12,10 @@ export const authEnabled = !!(
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true, // required behind cPanel/Passenger's reverse proxy
-  basePath: `${process.env.BASE_PATH ?? ''}/api/auth`,
+  // Next strips the app's basePath before route handlers run, so Auth.js
+  // always sees /api/auth/* — its basePath must be the stripped form.
+  // (The client-side SessionProvider basePath keeps the full public path.)
+  basePath: '/api/auth',
   adapter: MongoDBAdapter(clientPromise, { databaseName: DB_NAME }),
   providers: [Google],
   callbacks: {
