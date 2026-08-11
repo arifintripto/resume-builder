@@ -43,19 +43,18 @@ Signed in, your resumes live in MongoDB (`resumes` collection) and autosave ~1.5
 
 Target: `https://example.com/resume-builder` via cPanel's **Setup Node.js App** (Passenger). Requires Node ≥ 20.9 in the cPanel Node selector.
 
-The host allows neither SSH nor working FTP data channels, so CI deploys through cPanel itself: the workflow builds, force-pushes artifacts to a `deploy` branch, then calls cPanel's HTTPS API to pull that branch and run [.cpanel.yml](.cpanel.yml) (copy files → `npm install` → Passenger restart) — fully automatic, on the server, as your user.
+This host blocks SSH, FTP data channels, and outbound git — the only working channel is cPanel's own HTTPS API (port 2083). So the workflow builds everything on the runner (including production `node_modules` — same Linux/Node as the server), uploads a single tarball through the File Manager API, extracts it server-side, and touches `tmp/restart.txt` to restart Passenger. The server needs no git, npm, or shell.
 
 One-time setup:
 
 1. cPanel → **Setup Node.js App** → Create application:
    - Node version: 22 · Mode: Production
    - Application root: `resume-builder-app` · Application URL: `example.com/resume-builder`
-   - Startup file: `server.js` (no environment variables here — see step 4)
-2. Push to `main` once so the workflow publishes the `deploy` branch. Then cPanel → **Git™ Version Control** → Create: clone URL `https://github.com/<you>/resume-builder.git`, repository path `repositories/resume-builder`; after cloning, **Manage → checked-out branch → `deploy`**.
-3. cPanel → **Manage API Tokens** → create a token → add it as the `CPANEL_TOKEN` secret in GitHub (repo → Settings → Secrets → Actions). It's the only secret the workflow needs; update `CPANEL_HOST`/`CPANEL_USER`/`REPO_ROOT` at the top of the workflow if your paths differ.
-4. cPanel → **File Manager** → create `resume-builder-app/.env` with the production values (`BASE_PATH=/resume-builder`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_URL=https://example.com/resume-builder/api/auth`, `MONGODB_URI`, `MONGODB_DB=resume-builder`). It persists across deploys.
-5. Google Cloud Console → your OAuth client: add JavaScript origin `https://example.com` and redirect URI `https://example.com/resume-builder/api/auth/callback/google`.
-6. MongoDB Atlas → Network Access: allow the hosting server's IP.
+   - Startup file: `server.js` (no environment variables here — see step 3)
+2. cPanel → **Manage API Tokens** → create a token → add it as the `CPANEL_TOKEN` secret in GitHub (repo → Settings → Secrets → Actions). It's the only secret the workflow needs; update `CPANEL_HOST`/`CPANEL_USER`/`APP_PATH` at the top of the workflow for your account.
+3. cPanel → **File Manager** → create `resume-builder-app/.env` with the production values (`BASE_PATH=/resume-builder`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_URL=https://example.com/resume-builder/api/auth`, `MONGODB_URI`, `MONGODB_DB=resume-builder`). It persists across deploys.
+4. Google Cloud Console → your OAuth client: add JavaScript origin `https://example.com` and redirect URI `https://example.com/resume-builder/api/auth/callback/google`.
+5. MongoDB Atlas → Network Access: allow the hosting server's IP.
 
 After that, every push to `main` deploys end to end with no manual steps.
 

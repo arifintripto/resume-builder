@@ -4,18 +4,17 @@ on:
   push:
     branches: [main]
 
-# The host blocks FTP data channels and SSH, so deploys go through cPanel
-# itself: build here, publish artifacts to a `deploy` branch, then tell
-# cPanel (HTTPS API, port 2083) to pull that branch and run .cpanel.yml —
-# which copies files, npm-installs, and restarts Passenger on the server.
-
-permissions:
-  contents: write
+# This host blocks SSH, FTP data channels, AND outbound git — the only proven
+# channel is cPanel's own HTTPS API on port 2083. So: build everything on the
+# runner (including production node_modules — same Linux/Node 22 as the
+# server), upload one tarball via the File Manager API, extract it server-side,
+# and touch tmp/restart.txt so Passenger restarts. No git/npm/shell on the host.
 
 env:
   CPANEL_HOST: server16.webhostbd.net
   CPANEL_USER: alifarif
-  REPO_ROOT: /home/alifarif/repositories/resume-builder
+  APP_DIR: resume-builder-app
+  APP_PATH: /home/alifarif/resume-builder-app
 
 jobs:
   deploy:
@@ -39,49 +38,61 @@ jobs:
           BASE_PATH: /resume-builder
         run: npm run build
 
-      - name: Assemble deploy-branch content
+      - name: Assemble runtime bundle
         run: |
-          rm -rf .next/cache deploy
-          mkdir -p deploy
-          cp -r .next server.js package.json package-lock.json next.config.ts .cpanel.yml deploy/
+          rm -rf .next/cache
+          npm prune --omit=dev
+          mkdir -p bundle
+          cp -r .next node_modules server.js package.json package-lock.json next.config.ts bundle/
+          tar -czf build.tar.gz -C bundle .
+          ls -lh build.tar.gz
 
-      - name: Publish deploy branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cd deploy
-          git init -b deploy
-          git config user.name "github-actions"
-          git config user.email "github-actions@users.noreply.github.com"
-          git add -A
-          git commit -m "Build from ${GITHUB_SHA:0:7}"
-          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" deploy
-
-      - name: Trigger cPanel pull + deployment
+      - name: Deploy via cPanel API
         env:
           CPANEL_TOKEN: ${{ secrets.CPANEL_TOKEN }}
         run: |
-          if [ -z "$CPANEL_TOKEN" ]; then
-            echo "CPANEL_TOKEN secret not set — deploy branch published, server not triggered."
-            exit 0
-          fi
           AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
-          ROOT_ENC=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${REPO_ROOT}', safe=''))")
+          BASE="https://${CPANEL_HOST}:2083"
+          enc() { python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$1"; }
+          check() { python3 -c "
+          import json,sys
+          d=json.load(open(sys.argv[1]))
+          ok = d.get('status')==1 if 'status' in d else not d.get('cpanelresult',{}).get('error')
+          sys.exit(0 if ok else 1)
+          " "$1"; }
 
-          echo "Pulling deploy branch on the server..."
+          echo "1/5 Uploading bundle ($(du -h build.tar.gz | cut -f1))..."
+          curl -sS -H "$AUTH" -F "dir=${APP_DIR}" -F "file-1=@build.tar.gz" \
+            "${BASE}/execute/Fileman/upload_files" -o step.json
+          cat step.json; check step.json || { echo '::error::upload failed'; exit 1; }
+
+          echo "2/5 Removing old .next..."
           curl -sS -H "$AUTH" \
-            "https://${CPANEL_HOST}:2083/execute/VersionControl/update?repository_root=${ROOT_ENC}&branch=deploy" \
-            -o update.json
-          cat update.json
-          python3 -c "import json; d=json.load(open('update.json')); raise SystemExit(0 if d.get('status')==1 else 1)" \
-            || { echo '::error::cPanel pull failed'; exit 1; }
+            "${BASE}/json-api/cpanel?cpanel_jsonapi_user=${CPANEL_USER}&cpanel_jsonapi_apiversion=2&cpanel_jsonapi_module=Fileman&cpanel_jsonapi_func=fileop&op=unlink&sourcefiles=$(enc ${APP_PATH}/.next)" \
+            -o step.json
+          cat step.json  # non-fatal: .next may not exist on first deploy
 
-          echo "Running .cpanel.yml deployment tasks..."
+          echo "3/5 Extracting bundle..."
           curl -sS -H "$AUTH" \
-            "https://${CPANEL_HOST}:2083/execute/VersionControlDeploy/create?repository_root=${ROOT_ENC}" \
-            -o deploy.json
-          cat deploy.json
-          python3 -c "import json; d=json.load(open('deploy.json')); raise SystemExit(0 if d.get('status')==1 else 1)" \
-            || { echo '::error::cPanel deployment failed'; exit 1; }
+            "${BASE}/json-api/cpanel?cpanel_jsonapi_user=${CPANEL_USER}&cpanel_jsonapi_apiversion=2&cpanel_jsonapi_module=Fileman&cpanel_jsonapi_func=fileop&op=extract&sourcefiles=$(enc ${APP_PATH}/build.tar.gz)&destfiles=$(enc ${APP_PATH})" \
+            -o step.json
+          cat step.json; check step.json || { echo '::error::extract failed'; exit 1; }
 
-          echo "Server deployment triggered successfully."
+          echo "4/5 Deleting bundle archive..."
+          curl -sS -H "$AUTH" \
+            "${BASE}/json-api/cpanel?cpanel_jsonapi_user=${CPANEL_USER}&cpanel_jsonapi_apiversion=2&cpanel_jsonapi_module=Fileman&cpanel_jsonapi_func=fileop&op=unlink&sourcefiles=$(enc ${APP_PATH}/build.tar.gz)" \
+            -o step.json
+          cat step.json
+
+          echo "5/5 Touching tmp/restart.txt (Passenger restart)..."
+          curl -sS -H "$AUTH" \
+            "${BASE}/json-api/cpanel?cpanel_jsonapi_user=${CPANEL_USER}&cpanel_jsonapi_apiversion=2&cpanel_jsonapi_module=Fileman&cpanel_jsonapi_func=mkdir&path=$(enc ${APP_DIR})&name=tmp" \
+            -o step.json  # non-fatal: may already exist
+          curl -sS -H "$AUTH" \
+            --data-urlencode "dir=${APP_DIR}/tmp" \
+            --data-urlencode "file=restart.txt" \
+            --data-urlencode "content=deployed $(date -u +%Y-%m-%dT%H:%M:%SZ) from ${GITHUB_SHA:0:7}" \
+            "${BASE}/execute/Fileman/save_file_content" -o step.json
+          cat step.json; check step.json || { echo '::error::restart touch failed'; exit 1; }
+
+          echo "Deploy complete."
