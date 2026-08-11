@@ -19,7 +19,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={sourceSans.variable}>
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider
+          basePath={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/api/auth`}
+        >
+          {children}
+        </SessionProvider>
       </body>
     </html>
   )

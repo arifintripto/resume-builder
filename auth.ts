@@ -11,6 +11,8 @@ export const authEnabled = !!(
 )
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true, // required behind cPanel/Passenger's reverse proxy
+  basePath: `${process.env.BASE_PATH ?? ''}/api/auth`,
   adapter: MongoDBAdapter(clientPromise, { databaseName: DB_NAME }),
   providers: [Google],
   callbacks: {

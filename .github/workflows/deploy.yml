@@ -1,0 +1,54 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# Build on the runner with the subpath baked in; upload runtime artifacts over
+# FTP (the host's plan has no shell access). Passenger restarts automatically
+# because tmp/restart.txt changes every deploy. The one manual step: click
+# "Run NPM Install" in cPanel's Node.js screen whenever package.json changes.
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build with subpath
+        env:
+          BASE_PATH: /resume-builder
+        run: npm run build
+
+      - name: Assemble deploy folder
+        env:
+          RESUME_ENV: ${{ secrets.RESUME_ENV }}
+        run: |
+          rm -rf .next/cache
+          mkdir -p deploy/tmp
+          cp -r .next server.js package.json package-lock.json next.config.ts deploy/
+          printf '%s' "$RESUME_ENV" > deploy/.env
+          [ -s deploy/.env ] || { echo "FATAL: RESUME_ENV secret is empty"; exit 1; }
+          # changing content -> always uploaded -> Passenger restarts
+          date > deploy/tmp/restart.txt
+
+      - name: Upload via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          local-dir: deploy/
+          server-dir: ./

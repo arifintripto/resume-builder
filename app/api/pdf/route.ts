@@ -1,23 +1,11 @@
-import { existsSync } from 'fs'
 import puppeteer from 'puppeteer-core'
 import type { NextRequest } from 'next/server'
+import { findBrowser } from '@/lib/browser'
 
 export const runtime = 'nodejs'
 
-// Drives an already-installed browser — no bundled Chromium download.
-const BROWSERS = [
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  (process.env.LOCALAPPDATA ?? '') + '\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/usr/bin/google-chrome',
-  '/usr/bin/chromium-browser',
-]
-
 export async function POST(req: NextRequest) {
-  const executablePath = BROWSERS.find((p) => p && existsSync(p))
+  const executablePath = findBrowser()
   if (!executablePath) {
     return new Response(
       'No Chrome or Edge installation found on this machine.',
@@ -39,7 +27,9 @@ export async function POST(req: NextRequest) {
         `{"activeId":"pdf","items":[{"id":"pdf","data":${data}}]}`
       )
     }, resumeJson)
-    await page.goto(`http://${host}/`, { waitUntil: 'load' })
+    await page.goto(`http://${host}${process.env.BASE_PATH ?? ''}/`, {
+      waitUntil: 'load',
+    })
     await page.waitForSelector('.r-h2', { timeout: 15000 })
     await page.evaluate(() => document.fonts.ready)
     const pdf = await page.pdf({

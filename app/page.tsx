@@ -10,6 +10,7 @@ const STORE_KEY = 'resume-builder:store'
 const LEGACY_KEY = 'resume-builder:data'
 const ZOOM_KEY = 'resume-builder:viewzoom'
 const HISTORY_LIMIT = 50
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
 
 type Slot = { id: string; data: Resume }
 type Store = { activeId: string; items: Slot[] }
@@ -24,6 +25,7 @@ export default function Home() {
   const [viewZoom, setViewZoom] = useState(100)
   const [downloading, setDownloading] = useState(false)
   const [authEnabled, setAuthEnabled] = useState(false)
+  const [pdfEnabled, setPdfEnabled] = useState(true)
   const [cloud, setCloud] = useState<CloudState>('idle')
   const fileRef = useRef<HTMLInputElement>(null)
   const historiesRef = useRef<Map<string, History>>(new Map())
@@ -60,9 +62,12 @@ export default function Home() {
   }, [store, signedIn])
 
   useEffect(() => {
-    fetch('/api/config')
+    fetch(`${BASE}/api/config`)
       .then((r) => r.json())
-      .then((c) => setAuthEnabled(!!c.authEnabled))
+      .then((c) => {
+        setAuthEnabled(!!c.authEnabled)
+        setPdfEnabled(!!c.pdfEnabled)
+      })
       .catch(() => {})
   }, [])
 
@@ -77,7 +82,7 @@ export default function Home() {
     ;(async () => {
       setCloud('loading')
       try {
-        const res = await fetch('/api/resumes')
+        const res = await fetch(`${BASE}/api/resumes`)
         if (!res.ok) throw new Error()
         const list: { id: string; data: Resume }[] = await res.json()
         if (cancelled) return
@@ -109,7 +114,7 @@ export default function Home() {
         if (!migrated) next.items = [{ id: next.activeId, data: johnDoeResume() }]
         await Promise.all(
           next.items.map((i) =>
-            fetch(`/api/resumes/${i.id}`, {
+            fetch(`${BASE}/api/resumes/${i.id}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ data: i.data }),
@@ -139,7 +144,7 @@ export default function Home() {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/resumes/${activeSlot.id}`, {
+        const res = await fetch(`${BASE}/api/resumes/${activeSlot.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ data: activeSlot.data }),
@@ -241,7 +246,7 @@ export default function Home() {
     if (store.items.length === 1) return
     if (!confirm(`Delete resume "${plain(resume.name) || 'Untitled'}"?`)) return
     historiesRef.current.delete(active.id)
-    if (signedIn) fetch(`/api/resumes/${active.id}`, { method: 'DELETE' }).catch(() => {})
+    if (signedIn) fetch(`${BASE}/api/resumes/${active.id}`, { method: 'DELETE' }).catch(() => {})
     const items = store.items.filter((i) => i.id !== active.id)
     setStore({ activeId: items[0].id, items })
   }
@@ -254,7 +259,7 @@ export default function Home() {
   const downloadPdf = async () => {
     setDownloading(true)
     try {
-      const res = await fetch('/api/pdf', {
+      const res = await fetch(`${BASE}/api/pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(resume),
@@ -365,10 +370,18 @@ export default function Home() {
         <button onClick={reset}>Reset</button>
         <button onClick={exportJson}>Export JSON</button>
         <button onClick={() => fileRef.current?.click()}>Import JSON</button>
-        <button onClick={() => window.print()}>Print</button>
-        <button className="primary" onClick={downloadPdf} disabled={downloading}>
-          {downloading ? 'Rendering…' : 'Download PDF'}
+        <button
+          className={pdfEnabled ? undefined : 'primary'}
+          onClick={() => window.print()}
+          title={pdfEnabled ? undefined : 'Use your browser’s "Save as PDF" in the print dialog'}
+        >
+          Print
         </button>
+        {pdfEnabled && (
+          <button className="primary" onClick={downloadPdf} disabled={downloading}>
+            {downloading ? 'Rendering…' : 'Download PDF'}
+          </button>
+        )}
         {authEnabled &&
           (signedIn ? (
             <span className="auth-box" title={session?.user?.email ?? ''}>
