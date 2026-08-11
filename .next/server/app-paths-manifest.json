@@ -1,0 +1,10 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/config/route": "app/api/config/route.js",
+  "/api/pdf/route": "app/api/pdf/route.js",
+  "/api/resumes/[id]/route": "app/api/resumes/[id]/route.js",
+  "/api/resumes/route": "app/api/resumes/route.js",
+  "/page": "app/page.js"
+}
