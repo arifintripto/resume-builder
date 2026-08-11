@@ -4,10 +4,18 @@ on:
   push:
     branches: [main]
 
-# Build on the runner with the subpath baked in; upload runtime artifacts over
-# FTP (the host's plan has no shell access). Passenger restarts automatically
-# because tmp/restart.txt changes every deploy. The one manual step: click
-# "Run NPM Install" in cPanel's Node.js screen whenever package.json changes.
+# The host blocks FTP data channels and SSH, so deploys go through cPanel
+# itself: build here, publish artifacts to a `deploy` branch, then tell
+# cPanel (HTTPS API, port 2083) to pull that branch and run .cpanel.yml —
+# which copies files, npm-installs, and restarts Passenger on the server.
+
+permissions:
+  contents: write
+
+env:
+  CPANEL_HOST: server16.webhostbd.net
+  CPANEL_USER: alifarif
+  REPO_ROOT: /home/alifarif/repositories/resume-builder
 
 jobs:
   deploy:
@@ -31,26 +39,49 @@ jobs:
           BASE_PATH: /resume-builder
         run: npm run build
 
-      - name: Assemble deploy folder
-        env:
-          RESUME_ENV: ${{ secrets.RESUME_ENV }}
+      - name: Assemble deploy-branch content
         run: |
-          rm -rf .next/cache
-          mkdir -p deploy/tmp
-          cp -r .next server.js package.json package-lock.json next.config.ts deploy/
-          printf '%s' "$RESUME_ENV" > deploy/.env
-          [ -s deploy/.env ] || { echo "FATAL: RESUME_ENV secret is empty"; exit 1; }
-          # changing content -> always uploaded -> Passenger restarts
-          date > deploy/tmp/restart.txt
+          rm -rf .next/cache deploy
+          mkdir -p deploy
+          cp -r .next server.js package.json package-lock.json next.config.ts .cpanel.yml deploy/
 
-      - name: Upload via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          # ftps handshakes but the host firewalls encrypted data channels
-          # (passive-port timeouts) — plain ftp is what actually transfers.
-          protocol: ftp
-          local-dir: deploy/
-          server-dir: ./
+      - name: Publish deploy branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd deploy
+          git init -b deploy
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Build from ${GITHUB_SHA:0:7}"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" deploy
+
+      - name: Trigger cPanel pull + deployment
+        env:
+          CPANEL_TOKEN: ${{ secrets.CPANEL_TOKEN }}
+        run: |
+          if [ -z "$CPANEL_TOKEN" ]; then
+            echo "CPANEL_TOKEN secret not set — deploy branch published, server not triggered."
+            exit 0
+          fi
+          AUTH="Authorization: cpanel ${CPANEL_USER}:${CPANEL_TOKEN}"
+          ROOT_ENC=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${REPO_ROOT}', safe=''))")
+
+          echo "Pulling deploy branch on the server..."
+          curl -sS -H "$AUTH" \
+            "https://${CPANEL_HOST}:2083/execute/VersionControl/update?repository_root=${ROOT_ENC}&branch=deploy" \
+            -o update.json
+          cat update.json
+          python3 -c "import json; d=json.load(open('update.json')); raise SystemExit(0 if d.get('status')==1 else 1)" \
+            || { echo '::error::cPanel pull failed'; exit 1; }
+
+          echo "Running .cpanel.yml deployment tasks..."
+          curl -sS -H "$AUTH" \
+            "https://${CPANEL_HOST}:2083/execute/VersionControlDeploy/create?repository_root=${ROOT_ENC}" \
+            -o deploy.json
+          cat deploy.json
+          python3 -c "import json; d=json.load(open('deploy.json')); raise SystemExit(0 if d.get('status')==1 else 1)" \
+            || { echo '::error::cPanel deployment failed'; exit 1; }
+
+          echo "Server deployment triggered successfully."
